@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Leegion Album Listening Party - RSVP</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; background: #0b0b0b; color: #fff;
+           display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
+    .card { background:#111; padding:24px; border-radius:8px; width:100%; max-width:420px; box-shadow:0 6px 20px rgba(0,0,0,0.6); }
+    h2 { text-align:center; margin-top:0; }
+    input, textarea { width:100%; padding:10px; margin:8px 0; border-radius:6px; border:1px solid #222; }
+    button { width:100%; padding:12px; background:#e50914; color:#fff; border:none; border-radius:6px; font-weight:600; cursor:pointer; }
+    p.small { font-size:13px; color:#ccc; text-align:center; }
+    .qr { text-align:center; margin-top:12px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>🎶 Leegion Album Listening Party</h2>
+    <form action="/reserve" method="POST" id="rsvpForm">
+      <input name="name" type="text" placeholder="Full name" required />
+      <input name="email" type="email" placeholder="Email address" required />
+      <input name="phone" type="text" placeholder="Phone number" required />
+      <input name="guests" type="number" placeholder="Number of guests" min="1" value="1" required />
+      <textarea name="message" rows="3" placeholder="Any note or message (optional)"></textarea>
+      <button type="submit">Reserve my spot</button>
+    </form>
+    <p class="small">After successful reservation you'll see a QR code to present at the door.</p>
+  </div>
+</body>
+</html>
