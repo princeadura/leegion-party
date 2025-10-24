@@ -25,24 +25,38 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/qr-codes", express.static(path.join(__dirname, "qr-codes")));
 
+// Ensure QR folder exists
 if (!fs.existsSync(path.join(__dirname, "qr-codes"))) {
   fs.mkdirSync(path.join(__dirname, "qr-codes"));
 }
 
 await createTable();
 
-// Setup nodemailer only if EMAIL_USER and EMAIL_PASS present
+// Setup nodemailer (optional)
 let transporter = null;
 if (EMAIL_USER && EMAIL_PASS) {
   transporter = nodemailer.createTransport({
     service: "gmail",
     auth: { user: EMAIL_USER, pass: EMAIL_PASS },
   });
-  console.log("Email notifications enabled.");
+  console.log("📧 Email notifications enabled.");
 } else {
-  console.log("Email notifications disabled (set EMAIL_USER and EMAIL_PASS to enable).");
+  console.log("⚠️ Email notifications disabled (set EMAIL_USER and EMAIL_PASS to enable).");
 }
 
+// ------------------- ROUTES -------------------
+
+// 🏠 Home page (reservation form)
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// 🧑‍💼 Admin login page (serves admin.html)
+app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "admin.html"));
+});
+
+// 💌 Reservation submission
 app.post("/reserve", async (req, res) => {
   const { name, email, phone, guests, message } = req.body;
   try {
@@ -53,12 +67,12 @@ app.post("/reserve", async (req, res) => {
     );
     const reservationId = result.lastID;
 
-    // Generate QR pointing to verify route
+    // Generate QR code for this guest
     const qrData = `${BASE_URL}/verify/${reservationId}`;
     const qrPath = path.join("qr-codes", `reservation_${reservationId}.png`);
     await QRCode.toFile(path.join(__dirname, qrPath), qrData);
 
-    // Send admin email if transporter configured
+    // Send admin email if configured
     if (transporter && ADMIN_EMAIL) {
       const mailOptions = {
         from: `"Leegion Party" <${EMAIL_USER}>`,
@@ -78,7 +92,7 @@ app.post("/reserve", async (req, res) => {
       transporter.sendMail(mailOptions).catch(err => console.error("Email error:", err));
     }
 
-    // Respond with QR
+    // Respond with QR display page
     res.send(`<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Reserved</title></head><body style="font-family:Arial,Helvetica,sans-serif;background:#0b0b0b;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h2>🎶 Thank you, ${name}!</h2><p>Your reservation is confirmed. Show this QR at the door.</p><img src="/${qrPath}" alt="QR" style="width:220px;height:220px;margin-top:12px;"/><div style="margin-top:18px;"><a href="/" style="color:#e50914;text-decoration:none;">Make another reservation</a></div></div></body></html>`);
   } catch (err) {
     console.error(err);
@@ -86,12 +100,13 @@ app.post("/reserve", async (req, res) => {
   }
 });
 
-// Simple admin login page served at /admin (static). Form posts here.
+// 🔑 Admin login POST handler
 app.post("/admin", async (req, res) => {
   const { password } = req.body;
   if (password !== ADMIN_PASSWORD) {
     return res.status(401).send("<h3>❌ Invalid password</h3><p><a href='/admin'>Back</a></p>");
   }
+
   const db = await openDb();
   const guests = await db.all("SELECT * FROM reservations ORDER BY created_at DESC");
 
@@ -107,10 +122,28 @@ app.post("/admin", async (req, res) => {
     </tr>
   `).join("");
 
-  res.send(`<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Admin - Guests</title></head><body style="font-family:Arial,Helvetica,sans-serif;background:#f4f4f4;color:#111;padding:20px;"><h2>Guest List</h2><p><a href="/export?password=${encodeURIComponent(password)}">⬇ Export as CSV</a></p><table border="1" cellpadding="8" cellspacing="0">${rows.length?'<tr style="background:#222;color:#fff;"><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Guests</th><th>Reserved At</th><th>QR</th></tr>':''}${rows}</table><p><a href="/admin">Back</a></p></body></html>`);
+  res.send(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width,initial-scale=1"/>
+        <title>Admin - Guests</title>
+      </head>
+      <body style="font-family:Arial,Helvetica,sans-serif;background:#f4f4f4;color:#111;padding:20px;">
+        <h2>Guest List</h2>
+        <p><a href="/export?password=${encodeURIComponent(password)}">⬇ Export as CSV</a></p>
+        <table border="1" cellpadding="8" cellspacing="0">
+          ${rows.length ? '<tr style="background:#222;color:#fff;"><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Guests</th><th>Reserved At</th><th>QR</th></tr>' : ''}
+          ${rows}
+        </table>
+        <p><a href="/admin">Back</a></p>
+      </body>
+    </html>
+  `);
 });
 
-// CSV export
+// 📤 CSV export
 app.get("/export", async (req, res) => {
   const { password } = req.query;
   if (password !== ADMIN_PASSWORD) return res.status(403).send("Unauthorized");
@@ -122,7 +155,7 @@ app.get("/export", async (req, res) => {
   res.send(csv);
 });
 
-// QR verification
+// ✅ QR verification route
 app.get("/verify/:id", async (req, res) => {
   const id = req.params.id;
   const db = await openDb();
@@ -131,4 +164,5 @@ app.get("/verify/:id", async (req, res) => {
   res.send(`<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Verified</title></head><body style="font-family:Arial,Helvetica,sans-serif;background:#0b0b0b;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h2>✅ Verified: ${guest.name}</h2><p>Guests: ${guest.guests}</p><p>Reserved at: ${guest.created_at}</p><p><a href="#" onclick="window.print();return false;" style="color:#e50914;">Print</a></p></div></body></html>`);
 });
 
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+// 🚀 Start server
+app.listen(PORT, () => console.log(`🚀 Server running on ${BASE_URL}`));
